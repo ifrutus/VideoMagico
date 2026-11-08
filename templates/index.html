@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vídeo Mágico</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="wrap">
+        <header>
+            <h1>🎬 Vídeo Mágico</h1>
+            <p class="subtitle">Joga o vídeo bruto aqui, sai um reel editado do outro lado — 100% local, sem custo.</p>
+            <p class="subtitle"><a href="/chat">💬 Prefere conversar com um diretor de IA (zoom, câmera lenta, efeitos sonoros)? Vai pro modo chat →</a></p>
+            <p class="subtitle"><a href="/editor">✂️ Prefere editar você mesmo (cortar, reordenar, remover trechos)? Abre o editor simples →</a></p>
+        </header>
+
+        <form id="upload-form">
+            <div id="dropzone" class="dropzone">
+                <p id="dropzone-text">Arraste um vídeo aqui ou clique pra escolher</p>
+                <input type="file" id="file-input" name="file" accept="video/*" hidden>
+            </div>
+
+            <p class="or-divider">— ou —</p>
+
+            <label class="youtube-field">
+                Cole um link do YouTube
+                <input type="url" id="youtube-input" name="youtube_url" placeholder="https://www.youtube.com/watch?v=...">
+            </label>
+            <p class="hint">
+                Baixa com o <a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a>
+                (open-source, gratuito). Use só com vídeos seus ou que você tenha direito de reaproveitar.
+            </p>
+
+            <div class="options">
+                <label>
+                    Quantos cortes gerar
+                    <input type="number" name="numero_de_cortes" id="numero-de-cortes" value="1" min="1" max="30" step="1">
+                </label>
+
+                <label id="duracao-alvo-label">
+                    Duração alvo (segundos)
+                    <input type="number" name="duration" id="duration-input" value="60" min="10" max="600" step="5">
+                </label>
+
+                <label id="duracao-por-corte-label" hidden>
+                    Duração máxima de cada corte (segundos)
+                    <input type="number" name="duracao_maxima_por_corte" id="duracao-por-corte-input" value="60" min="10" max="180" step="5">
+                </label>
+
+                <label>
+                    Formato
+                    <select name="aspect">
+                        <option value="9:16">9:16 (Reels / TikTok / Stories)</option>
+                        <option value="1:1">1:1 (Feed quadrado)</option>
+                        <option value="16:9">16:9 (YouTube)</option>
+                    </select>
+                </label>
+
+                <label>
+                    Transição entre cortes (segundos)
+                    <input type="number" name="crossfade" value="0.4" min="0" max="2" step="0.1">
+                </label>
+
+                <label>
+                    Qualidade da transcrição
+                    <select name="model_size">
+                        <option value="tiny">Rápida (tiny)</option>
+                        <option value="base" selected>Equilibrada (base)</option>
+                        <option value="small">Melhor (small)</option>
+                        <option value="medium">Alta (medium, mais lento)</option>
+                    </select>
+                </label>
+
+                <label>
+                    Música de fundo
+                    <select name="music">
+                        <option value="">Nenhuma</option>
+                        {% for m in music_files %}
+                        <option value="{{ m }}">{{ m }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    Ritmo dos cortes
+                    <select name="ritmo_cortes">
+                        <option value="rapido">Rápido (cortes mais curtos)</option>
+                        <option value="equilibrado" selected>Equilibrado</option>
+                        <option value="lento">Lento (cortes mais longos)</option>
+                    </select>
+                </label>
+
+                <label>
+                    Motion graphics (abertura)
+                    <select name="motion_graphic">
+                        <option value="">Nenhum</option>
+                        {% for m in motion_graphics_files %}
+                        <option value="{{ m }}">{{ m }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    Estilo da legenda
+                    <select name="estilo_legenda">
+                        <option value="padrao" selected>Padrão</option>
+                        <option value="impacto">Impacto (grande e amarela)</option>
+                        <option value="minimalista">Minimalista (discreta)</option>
+                        <option value="topo">No topo do vídeo</option>
+                    </select>
+                </label>
+            </div>
+            <p class="hint">
+                "1 corte" = um reel só juntando os melhores momentos até a duração alvo.
+                Mais de 1 = cada momento forte vira o SEU PRÓPRIO vídeo pronto
+                (como Opus Clip/Klap), numa subpasta — você escolhe quantos.
+            </p>
+
+            {% if not music_files %}
+            <p class="hint">
+                Dica: coloque arquivos .mp3/.wav royalty-free na pasta <code>music/</code>
+                (ex: YouTube Audio Library, Pixabay Music — download gratuito e único)
+                pra eles aparecerem aqui.
+            </p>
+            {% endif %}
+
+            {% if not motion_graphics_files %}
+            <p class="hint">
+                Dica: coloque arquivos de título animado/transição (fundo transparente ou
+                fundo verde) royalty-free na pasta <code>motion_graphics/</code>
+                (ex: Mixkit, Pixabay Videos) pra eles aparecerem aqui.
+            </p>
+            {% endif %}
+
+            <button type="submit" id="submit-btn">Editar vídeo</button>
+        </form>
+
+        <div id="progress-area" class="progress-area" hidden>
+            <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+            <p id="progress-msg">Processando...</p>
+        </div>
+
+        <div id="result-area" class="result-area" hidden>
+            <h2>Pronto! ✨</h2>
+            <p id="result-summary"></p>
+            <button id="btn-abrir-pasta" type="button" hidden>📂 Ver na pasta</button>
+
+            <div id="result-single">
+                <video id="result-video" controls></video>
+                <div class="downloads">
+                    <a id="dl-final" href="#" download>⬇ Vídeo final</a>
+                    <a id="dl-srt" href="#" download>⬇ Legenda (.srt)</a>
+                    <a id="dl-transcript" href="#" download>⬇ Transcript completo</a>
+                    <a id="dl-fcpxml" href="#" download>⬇ Sequência pro Premiere (.fcpxml)</a>
+                </div>
+                <p class="hint">
+                    Pra abrir no Premiere: File → Import → escolha o arquivo .fcpxml.
+                    Ele traz uma sequência com os cortes já marcados a partir do vídeo bruto original.
+                </p>
+            </div>
+
+            <div id="result-multi" hidden>
+                <div id="cortes-list" class="cortes-list"></div>
+                <p class="hint">
+                    Cada corte já vem sem os respiros/hesitações nas bordas e com legenda
+                    queimada. O .fcpxml de cada um abre no Premiere (File → Import) com o
+                    corte marcado a partir do vídeo bruto original.
+                </p>
+            </div>
+        </div>
+
+        <div id="error-area" class="error-area" hidden></div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

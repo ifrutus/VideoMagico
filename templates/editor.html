@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vídeo Mágico — Editor</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/editor.css">
+</head>
+<body>
+    <div class="editor-wrap">
+        <header>
+            <h1>✂️ Vídeo Mágico — editor simples</h1>
+            <p class="subtitle">
+                Corte pedaços do vídeo, arraste pra reordenar e remova o que não quer —
+                como num editor de verdade (CapCut, Premiere, DaVinci), só mais simples.
+            </p>
+        </header>
+
+        <div id="upload-step" class="upload-step">
+            <div id="dropzone" class="dropzone">
+                <p id="dropzone-text">Arraste um vídeo aqui ou clique pra escolher</p>
+                <input type="file" id="file-input" accept="video/*" hidden>
+            </div>
+            <p class="hint">
+                Por enquanto o editor só aceita arquivo de vídeo (sem link do YouTube aqui
+                — use o modo automático ou o chat pra isso).
+            </p>
+        </div>
+
+        <div id="editor-step" class="editor-step" hidden>
+            <p id="resume-note" class="hint" hidden>
+                ↻ Continuando de onde você parou — seus cortes marcados foram mantidos.
+                <a href="#" id="restart-link">Começar outro vídeo</a>
+            </p>
+            <video id="source-video" controls></video>
+
+            <div class="mark-row">
+                <label>
+                    Início
+                    <div class="time-field">
+                        <input type="text" id="start-input" placeholder="0:00" inputmode="decimal">
+                        <button type="button" id="use-current-start" title="Usar a posição atual do vídeo">usar atual</button>
+                    </div>
+                </label>
+                <label>
+                    Fim
+                    <div class="time-field">
+                        <input type="text" id="end-input" placeholder="0:10" inputmode="decimal">
+                        <button type="button" id="use-current-end" title="Usar a posição atual do vídeo">usar atual</button>
+                    </div>
+                </label>
+                <button type="button" id="add-clip-btn">+ Adicionar corte à lista</button>
+            </div>
+            <p class="hint">
+                Toque em "usar atual" enquanto o vídeo está pausado (ou pausado no ponto
+                certo) pra marcar início/fim pelo tempo que está tocando — ou digite direto
+                em segundos (ex: <code>12.5</code>) ou minuto:segundo (ex: <code>1:05</code>).
+            </p>
+
+            <h2>Seus cortes <span class="muted">(arraste pra reordenar)</span></h2>
+            <ul id="clips-list" class="clips-list"></ul>
+            <p id="no-clips-hint" class="hint">Nenhum corte ainda — marque início/fim acima e adicione à lista.</p>
+
+            <button type="button" id="export-btn" disabled>Exportar vídeo editado</button>
+
+            <div id="export-progress" class="progress-area" hidden>
+                <div class="progress-bar"><div id="export-progress-fill" class="progress-fill"></div></div>
+                <p id="export-progress-msg">Processando...</p>
+            </div>
+
+            <div id="export-result" class="result-area" hidden>
+                <h2>Pronto! ✨</h2>
+                <video id="result-video" controls></video>
+                <div class="downloads">
+                    <a id="dl-result" href="#" download="editado.mp4">⬇ Baixar vídeo editado</a>
+                </div>
+            </div>
+
+            <div id="editor-error" class="error-area" hidden></div>
+        </div>
+
+        <p class="back-link"><a href="/">← Voltar pro modo automático</a></p>
+    </div>
+
+    <script src="/static/editor.js"></script>
+</body>
+</html>

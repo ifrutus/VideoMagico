@@ -1,0 +1,28 @@
+# Pastas de execução/testes (vídeos e dados gerados a cada uso, não são
+# código — não fazem sentido versionar nem deixar público)
+jobs/
+uploads/
+editor_jobs/
+entrada/
+saida/
+runtime/
+__pycache__/
+*.pyc
+ultimo_erro.log
+
+# Assets que você baixa (royalty-free) pra usar nos vídeos: ficam só na sua
+# máquina, não no repositório — além de não precisar (não é código), muita
+# licença royalty-free não permite redistribuir o arquivo original.
+music/*
+!music/README.md
+sfx/*
+!sfx/README.md
+motion_graphics/*
+!motion_graphics/README.md
+
+# Lixo comum de SO/editor
+.DS_Store
+Thumbs.db
+.vscode/
+venv/
+.venv/

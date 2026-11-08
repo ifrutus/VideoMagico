@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vídeo Mágico — Chat</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/chat.css">
+</head>
+<body>
+    <div class="chat-wrap">
+        <header class="chat-header">
+            <h1>🎬 Vídeo Mágico — conversa</h1>
+            <p class="subtitle">
+                Manda o vídeo bruto, conversa com o diretor de IA (rodando local via
+                <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>,
+                grátis) pra pedir cortes, zoom, câmera lenta, efeitos sonoros e texto de destaque.
+            </p>
+        </header>
+
+        <div id="upload-step" class="upload-step">
+            <div id="dropzone" class="dropzone">
+                <p id="dropzone-text">Arraste o vídeo bruto aqui ou clique pra escolher</p>
+                <input type="file" id="file-input" accept="video/*" hidden>
+            </div>
+
+            <p class="or-divider">— ou —</p>
+
+            <label class="youtube-field">
+                Cole um link do YouTube
+                <input type="url" id="youtube-input" placeholder="https://www.youtube.com/watch?v=...">
+            </label>
+            <p class="hint">
+                Baixa com o <a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a>
+                (open-source, gratuito). Use só com vídeos seus ou que você tenha direito de reaproveitar.
+            </p>
+
+            <button id="start-btn" disabled>Começar a conversa</button>
+            <p class="hint" id="ollama-hint">
+                Precisa do <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>
+                instalado e rodando no seu computador (gratuito). Se não tiver, o app te avisa
+                assim que você mandar a primeira mensagem.
+            </p>
+        </div>
+
+        <div id="chat-step" class="chat-step" hidden>
+            <div class="chat-panel">
+                <div id="messages" class="messages"></div>
+                <form id="message-form" class="message-form">
+                    <input type="text" id="message-input" placeholder="Ex: corta os melhores 30s, foca na parte da colheita, bota zoom quando eu falar 'incrível'..." autocomplete="off">
+                    <button type="submit" id="send-btn">Enviar</button>
+                </form>
+                <div id="turn-progress" class="turn-progress" hidden>
+                    <div class="progress-bar"><div id="turn-progress-fill" class="progress-fill"></div></div>
+                    <p id="turn-progress-msg"></p>
+                </div>
+            </div>
+
+            <div class="preview-panel">
+                <video id="result-video" controls></video>
+                <p id="no-result" class="hint">O vídeo aparece aqui depois da sua primeira instrução.</p>
+                <div id="downloads" class="downloads" hidden>
+                    <a id="dl-final" href="#" download>⬇ Vídeo final</a>
+                    <a id="dl-srt" href="#" download>⬇ Legenda (.srt)</a>
+                    <a id="dl-transcript" href="#" download>⬇ Transcript completo</a>
+                    <a id="dl-fcpxml" href="#" download>⬇ Sequência pro Premiere (.fcpxml)</a>
+                </div>
+            </div>
+        </div>
+
+        <p class="back-link"><a href="/">← Voltar pro modo automático</a></p>
+    </div>
+
+    <script src="/static/chat.js"></script>
+</body>
+</html>

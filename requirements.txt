@@ -1,0 +1,25 @@
+# Todas as libs abaixo são open-source / gratuitas. Nenhuma exige conta,
+# chave de API paga ou sistema de créditos. Você baixa uma vez (pip install)
+# e roda offline pra sempre (só a primeira transcrição baixa o modelo Whisper
+# do Hugging Face, que também é gratuito e fica salvo em cache local).
+
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+jinja2>=3.1
+
+faster-whisper>=1.0.0
+scenedetect[opencv]>=0.6.4
+librosa>=0.10
+numpy>=1.26
+soundfile>=0.12
+
+# pra importar vídeo direto de um link do YouTube (modo automático e chat)
+yt-dlp>=2024.1
+
+# pra mostrar um aviso do sistema (com clique pra abrir a pasta) quando os
+# cortes automáticos terminam. Ambas open-source/gratuitas; se por algum
+# motivo não instalarem na sua máquina, o app funciona normalmente — só não
+# mostra a notificação (o aviso no terminal continua aparecendo sempre).
+win10toast-click>=0.1.3; sys_platform == "win32"
+plyer>=2.1.0

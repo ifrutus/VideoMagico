@@ -1,0 +1,34 @@
+{
+  "duracao_alvo_segundos": 60,
+  "formato": "9:16",
+  "transicao_segundos": 0.4,
+  "musica": "",
+  "qualidade_transcricao": "base",
+  "idioma": "pt",
+
+  "ollama_model": "llama3.2:3b",
+  "ollama_base_url": "http://localhost:11434",
+
+  "numero_de_cortes": 10,
+  "duracao_maxima_por_corte_segundos": 60,
+
+  "motion_graphic": "",
+  "ritmo_cortes": "equilibrado",
+  "estilo_legenda": "padrao",
+
+  "_ajuda": {
+    "duracao_alvo_segundos": "duração aproximada do vídeo final, em segundos (só usado quando numero_de_cortes = 1)",
+    "formato": "9:16 (Reels/TikTok/Stories), 1:1 (feed quadrado) ou 16:9 (YouTube)",
+    "transicao_segundos": "duração da transição suave entre os cortes",
+    "musica": "nome de um arquivo dentro da pasta music/ (ex: 'trilha.mp3'). Deixe vazio para não usar música",
+    "qualidade_transcricao": "tiny (mais rápido), base, small, medium (mais lento e melhor)",
+    "idioma": "código do idioma do áudio, ex: pt. Deixe vazio para detecção automática",
+    "ollama_model": "modelo do Ollama usado no modo chat (diretor de IA). Troque por um maior se seu computador aguentar",
+    "ollama_base_url": "endereço do Ollama rodando no seu computador — normalmente não precisa mudar",
+    "numero_de_cortes": "quantos vídeos SEPARADOS gerar a partir de 1 vídeo bruto, cada um na sua subpasta corte_01/, corte_02/... (como Opus Clip/Klap). Coloque 1 pra voltar ao modo antigo (um reel só, sem subpastas)",
+    "duracao_maxima_por_corte_segundos": "duração máxima de CADA corte quando numero_de_cortes > 1",
+    "motion_graphic": "nome de um arquivo dentro da pasta motion_graphics/ (ex: 'titulo_abertura.webm'). Entra sobreposto nos primeiros segundos de CADA corte gerado. Deixe vazio para não usar nenhum",
+    "ritmo_cortes": "'rapido' (cortes mais curtos, edição mais agitada), 'equilibrado' (padrão) ou 'lento' (cortes mais longos, edição mais contemplativa)",
+    "estilo_legenda": "'padrao', 'impacto' (bem grande e amarela, tipo MrBeast), 'minimalista' (discreta, branca, sem negrito) ou 'topo' (igual ao padrão mas no topo do vídeo em vez de embaixo)"
+  }
+}
