@@ -3,6 +3,7 @@ Gera legendas estilo "TikTok" (poucas palavras por vez, destacadas) em
 formato ASS a partir dos timestamps por palavra do Whisper. ASS é queimado
 no vídeo pelo próprio FFmpeg (via libass) — nenhuma ferramenta externa.
 """
+import math
 import os
 
 
@@ -98,6 +99,48 @@ STYLE_PRESETS = {
         "marginv_scale": 0.08,
     },
 }
+
+
+def cues_from_transcript(transcript: dict, max_words_per_cue=4) -> list[dict]:
+    cues = []
+    for segment in transcript["segments"]:
+        words = segment.get("words") or []
+        if words:
+            chunks = (words[i:i + max_words_per_cue] for i in range(0, len(words), max_words_per_cue))
+            for chunk in chunks:
+                text = "".join(w["word"] for w in chunk).strip()
+                start = max(0.0, float(chunk[0]["start"]))
+                end = max(start + 0.05, float(chunk[-1]["end"]))
+                if text:
+                    cues.append({"start": start, "end": end, "text": text})
+        elif segment.get("text", "").strip():
+            start = max(0.0, float(segment["start"]))
+            cues.append({"start": start, "end": max(start + 0.05, float(segment["end"])),
+                         "text": segment["text"].strip()})
+    return cues
+
+
+def build_ass_for_cues(cues: list[dict], out_path: str, width: int, height: int):
+    preset = STYLE_PRESETS["padrao"]
+    lines = [ASS_HEADER.format(
+        width=width, height=height, fontsize=max(32, int(height * preset["fontsize_scale"])),
+        marginv=int(height * preset["marginv_scale"]),
+        fontsize_destaque=max(40, int(height * preset["fontsize_destaque_scale"])),
+        marginv_topo=int(height * 0.08), fontname=preset["fontname"],
+        cor_legenda=preset["cor_legenda"], cor_destaque=preset["cor_destaque"],
+        bold=preset["bold"], outline=preset["outline"],
+        outline_destaque=preset["outline_destaque"], alinhamento=preset["alinhamento"],
+    )]
+    for cue in cues:
+        start, end = float(cue["start"]), float(cue["end"])
+        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+            raise ValueError("Os tempos de uma legenda são inválidos.")
+        text = _ass_text(str(cue["text"]).strip().upper()).replace("\\", "＼")
+        if text:
+            lines.append(f"Dialogue: 0,{_fmt_ts(start)},{_fmt_ts(end)},Default,{text}")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    return out_path
 
 
 def build_ass_for_segment(

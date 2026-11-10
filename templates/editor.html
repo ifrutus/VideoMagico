@@ -7,82 +7,215 @@
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/editor.css">
 </head>
-<body>
-    <div class="editor-wrap">
-        <header>
-            <h1>✂️ Vídeo Mágico — editor simples</h1>
-            <p class="subtitle">
-                Corte pedaços do vídeo, arraste pra reordenar e remova o que não quer —
-                como num editor de verdade (CapCut, Premiere, DaVinci), só mais simples.
-            </p>
+<body class="editor-body">
+    <div class="app">
+        <header class="topbar">
+            <a class="back" href="/">← Modo automático</a>
+            <strong class="brand">✂️ Editor</strong>
+            <div class="top-actions">
+                <button type="button" id="undo-btn" title="Desfazer (Ctrl+Z)">↶</button>
+                <button type="button" id="redo-btn" title="Refazer (Ctrl+Y)">↷</button>
+                <select id="aspect-select" title="Formato do vídeo">
+                    <option value="1920x1080">16:9 (YouTube)</option>
+                    <option value="1080x1920">9:16 (Reels/Shorts/TikTok)</option>
+                    <option value="1080x1080">1:1 (Quadrado)</option>
+                    <option value="1080x1350">4:5 (Feed)</option>
+                </select>
+                <button type="button" id="cover-btn" title="Criar uma capa/imagem do zero">🖼 Criar imagem / capa</button>
+                <button type="button" id="captions-btn" title="Gerar e revisar legendas da linha do tempo">Legendas automáticas</button>
+                <button type="button" id="new-project-btn" title="Limpar a linha do tempo">Novo projeto</button>
+                <button type="button" id="export-btn" class="primary">Exportar vídeo</button>
+            </div>
         </header>
 
-        <div id="upload-step" class="upload-step">
-            <div id="dropzone" class="dropzone">
-                <p id="dropzone-text">Arraste um vídeo aqui ou clique pra escolher</p>
-                <input type="file" id="file-input" accept="video/*" hidden>
-            </div>
-            <p class="hint">
-                Por enquanto o editor só aceita arquivo de vídeo (sem link do YouTube aqui
-                — use o modo automático ou o chat pra isso).
-            </p>
+        <div class="workspace">
+            <aside class="panel media-panel">
+                <div class="panel-head">
+                    <span>Mídia</span>
+                    <button type="button" id="import-btn" class="small primary">+ Importar</button>
+                    <input type="file" id="file-input" accept="video/*,audio/*,image/*" multiple hidden>
+                </div>
+                <div id="media-drop" class="media-list">
+                    <p class="hint" id="media-empty">Arraste arquivos aqui ou clique em Importar (vídeo, áudio, imagem).</p>
+                </div>
+            </aside>
+
+            <section class="panel preview-panel">
+                <div class="preview-stage"><canvas id="preview"></canvas></div>
+                <div class="transport">
+                    <button type="button" id="play-btn" title="Tocar/Pausar (Espaço)">▶</button>
+                    <button type="button" id="start-btn" title="Ir pro início">⏮</button>
+                    <span id="time-label" class="time-label">0:00.0 / 0:00.0</span>
+                    <span class="spacer"></span>
+                    <label class="zoom">Zoom <input type="range" id="zoom-range" min="10" max="300" value="80"></label>
+                </div>
+            </section>
+
+            <aside class="panel inspector" id="inspector">
+                <div class="panel-head"><span>Propriedades</span></div>
+                <p class="hint" id="inspector-empty">Clique num clipe da linha do tempo pra ajustar volume, tamanho, posição, fade...</p>
+                <div id="inspector-body" hidden>
+                    <p id="insp-name" class="insp-name"></p>
+                    <div class="insp-actions">
+                        <button type="button" id="split-btn" title="Dividir no cursor (S)">✂ Dividir</button>
+                        <button type="button" id="dup-btn">⧉ Duplicar</button>
+                        <button type="button" id="del-btn" class="danger">🗑 Excluir</button>
+                    </div>
+                    <button type="button" id="edit-image-btn" class="wide" hidden>🎨 Editar imagem</button>
+
+                    <label>Duração (s) <input type="number" id="insp-dur" min="0.1" step="0.1"></label>
+                    <div data-for="audio">
+                        <label>Volume <span id="insp-volume-val"></span>
+                            <input type="range" id="insp-volume" min="0" max="200" step="1"></label>
+                    </div>
+                    <div data-for="visual">
+                        <label>Opacidade <span id="insp-opacity-val"></span>
+                            <input type="range" id="insp-opacity" min="0" max="100" step="1"></label>
+                        <label>Tamanho <span id="insp-scale-val"></span>
+                            <input type="range" id="insp-scale" min="5" max="400" step="1"></label>
+                        <label>Posição horizontal <span id="insp-x-val"></span>
+                            <input type="range" id="insp-x" min="-50" max="150" step="1"></label>
+                        <label>Posição vertical <span id="insp-y-val"></span>
+                            <input type="range" id="insp-y" min="-50" max="150" step="1"></label>
+                        <button type="button" id="reset-pos-btn" class="wide">Centralizar e ajustar à tela</button>
+                    </div>
+                    <label>Fade de entrada (s) <input type="number" id="insp-fade-in" min="0" step="0.1"></label>
+                    <label>Fade de saída (s) <input type="number" id="insp-fade-out" min="0" step="0.1"></label>
+                </div>
+            </aside>
         </div>
 
-        <div id="editor-step" class="editor-step" hidden>
-            <p id="resume-note" class="hint" hidden>
-                ↻ Continuando de onde você parou — seus cortes marcados foram mantidos.
-                <a href="#" id="restart-link">Começar outro vídeo</a>
-            </p>
-            <video id="source-video" controls></video>
-
-            <div class="mark-row">
-                <label>
-                    Início
-                    <div class="time-field">
-                        <input type="text" id="start-input" placeholder="0:00" inputmode="decimal">
-                        <button type="button" id="use-current-start" title="Usar a posição atual do vídeo">usar atual</button>
-                    </div>
-                </label>
-                <label>
-                    Fim
-                    <div class="time-field">
-                        <input type="text" id="end-input" placeholder="0:10" inputmode="decimal">
-                        <button type="button" id="use-current-end" title="Usar a posição atual do vídeo">usar atual</button>
-                    </div>
-                </label>
-                <button type="button" id="add-clip-btn">+ Adicionar corte à lista</button>
+        <section class="timeline-panel">
+            <div class="tl-toolbar">
+                <div class="edit-tools" role="group" aria-label="Ferramentas de edição">
+                    <button type="button" id="tool-select" class="small tool-active" aria-pressed="true" title="Selecionar e mover clipes (V)">↖ Selecionar</button>
+                    <button type="button" id="tool-blade" class="small" aria-pressed="false" title="Cortar clicando no clipe (C)">✂ Lâmina</button>
+                    <button type="button" id="tool-join" class="small" title="Encostar o clipe selecionado no clipe anterior da mesma faixa">↤ Encostar</button>
+                    <button type="button" id="tool-transition" class="small" title="Aplicar transição entre o clipe selecionado e o próximo">◐ Transição</button>
+                </div>
+                <button type="button" id="add-video-track" class="small">+ Faixa de vídeo/imagem</button>
+                <button type="button" id="add-audio-track" class="small">+ Faixa de áudio</button>
+                <span class="hint kbd" id="tool-hint">Selecione e arraste os clipes. C: lâmina · V: seleção · S: dividir no cursor</span>
             </div>
-            <p class="hint">
-                Toque em "usar atual" enquanto o vídeo está pausado (ou pausado no ponto
-                certo) pra marcar início/fim pelo tempo que está tocando — ou digite direto
-                em segundos (ex: <code>12.5</code>) ou minuto:segundo (ex: <code>1:05</code>).
-            </p>
+            <div id="tl-scroll" class="tl-scroll">
+                <div id="tl-inner" class="tl-inner"></div>
+            </div>
+        </section>
+    </div>
 
-            <h2>Seus cortes <span class="muted">(arraste pra reordenar)</span></h2>
-            <ul id="clips-list" class="clips-list"></ul>
-            <p id="no-clips-hint" class="hint">Nenhum corte ainda — marque início/fim acima e adicione à lista.</p>
+    <div id="transition-modal" class="modal" hidden>
+        <div class="modal-box transition-box">
+            <h2>Transição entre clipes</h2>
+            <p id="transition-pair" class="hint"></p>
+            <label for="transition-kind">Tipo de transição</label>
+            <select id="transition-kind">
+                <option value="both">Desvanecer saída e entrada</option>
+                <option value="in">Entrada suave</option>
+                <option value="out">Saída suave</option>
+                <option value="overlay">Efeito de vídeo importado</option>
+            </select>
+            <div id="transition-fade-settings">
+                <label for="transition-duration">Duração de cada fade (segundos)</label>
+                <input type="number" id="transition-duration" min="0.05" max="10" step="0.05" value="0.5">
+                <p class="hint">A imagem e o áudio do clipe desvanecem; camadas inferiores permanecem visíveis. Substitui os fades correspondentes dos clipes.</p>
+            </div>
+            <div id="transition-overlay-settings" hidden>
+                <label for="transition-asset">Vídeo de efeito na biblioteca</label>
+                <select id="transition-asset"></select>
+                <button type="button" id="transition-import">Importar vídeo de efeito</button>
+                <input type="file" id="transition-file" accept="video/*,.mov,.webm" hidden>
+                <p class="hint">O efeito fica em uma nova faixa acima da montagem, centralizado na junção e sem áudio. Para sobrepor sem cobrir a imagem, use um vídeo com transparência compatível; vídeos opacos cobrem a imagem.</p>
+            </div>
+            <p id="transition-error" class="error-area" role="alert" hidden></p>
+            <div class="transition-actions">
+                <button type="button" id="transition-apply" class="primary">Aplicar</button>
+                <button type="button" id="transition-close">Cancelar</button>
+            </div>
+        </div>
+    </div>
 
-            <button type="button" id="export-btn" disabled>Exportar vídeo editado</button>
+    <div id="captions-modal" class="modal" hidden>
+        <div class="modal-box captions-box">
+            <h2>Legendas automáticas</h2>
+            <p class="hint">Transcreve o áudio audível da linha do tempo. Na primeira vez, o modelo é baixado e pode demorar.</p>
+            <p class="hint">Na linha do tempo, clique em uma legenda para editar seu texto aqui.</p>
+            <p id="captions-status" role="status"></p>
+            <div class="captions-actions">
+                <button type="button" id="captions-generate" class="primary">Gerar legendas</button>
+                <button type="button" id="captions-clear" class="danger">Remover todas</button>
+            </div>
+            <div id="captions-list" class="captions-list"></div>
+            <button type="button" id="captions-close">Fechar</button>
+        </div>
+    </div>
 
-            <div id="export-progress" class="progress-area" hidden>
+    <div id="export-modal" class="modal" hidden>
+        <div class="modal-box">
+            <h2>Exportar vídeo</h2>
+            <div id="export-progress" class="progress-area">
                 <div class="progress-bar"><div id="export-progress-fill" class="progress-fill"></div></div>
                 <p id="export-progress-msg">Processando...</p>
             </div>
-
-            <div id="export-result" class="result-area" hidden>
-                <h2>Pronto! ✨</h2>
+            <div id="export-result" hidden>
                 <video id="result-video" controls></video>
-                <div class="downloads">
-                    <a id="dl-result" href="#" download="editado.mp4">⬇ Baixar vídeo editado</a>
-                </div>
+                <div class="downloads"><a id="dl-result" href="#" download="editado.mp4">⬇ Baixar vídeo editado</a></div>
             </div>
-
-            <div id="editor-error" class="error-area" hidden></div>
+            <div id="export-error" class="error-area" hidden></div>
+            <button type="button" id="export-close">Fechar</button>
         </div>
-
-        <p class="back-link"><a href="/">← Voltar pro modo automático</a></p>
     </div>
 
+    <div id="toast" class="toast" hidden></div>
+    <div id="clip-menu" class="clip-menu" role="menu" hidden>
+        <button type="button" id="separate-audio" role="menuitem">Separar áudio e vincular ao vídeo</button>
+        <button type="button" id="group-clips" role="menuitem">Agrupar clipes selecionados</button>
+        <button type="button" id="ungroup-clips" role="menuitem">Desagrupar clipes</button>
+    </div>
+
+    <div id="img-modal" class="modal img-modal" hidden>
+        <div class="img-editor">
+            <div class="ie-top">
+                <strong>🎨 Editor de imagem</strong>
+                <select id="ie-preset" title="Tamanho da imagem">
+                    <option value="1280x720">Capa YouTube 1280×720</option>
+                    <option value="1920x1080">Full HD 1920×1080</option>
+                    <option value="1080x1920">Vertical 1080×1920</option>
+                    <option value="1080x1080">Quadrado 1080×1080</option>
+                    <option value="1080x1350">Feed 1080×1350</option>
+                </select>
+                <label class="inline">Fundo <input type="color" id="ie-bg" value="#101820"></label>
+                <label class="inline"><input type="checkbox" id="ie-transparent"> Transparente</label>
+                <span class="spacer"></span>
+                <button type="button" id="ie-undo" title="Desfazer">↶</button>
+                <button type="button" id="ie-download">⬇ PNG</button>
+                <button type="button" id="ie-save" class="primary">Salvar na biblioteca</button>
+                <button type="button" id="ie-close">✕</button>
+            </div>
+            <div class="ie-body">
+                <aside class="ie-left">
+                    <div class="ie-group">
+                        <span class="ie-title">Adicionar</span>
+                        <button type="button" data-add="text">T Texto</button>
+                        <button type="button" data-add="rect">▭ Retângulo</button>
+                        <button type="button" data-add="ellipse">◯ Elipse</button>
+                        <button type="button" data-add="arrow">➜ Seta</button>
+                        <button type="button" id="ie-add-file">🖼 Imagem do computador</button>
+                        <input type="file" id="ie-file" accept="image/*" hidden>
+                        <select id="ie-add-asset"><option value="">Imagem da biblioteca…</option></select>
+                        <button type="button" id="ie-add-frame">🎞 Frame atual do vídeo</button>
+                    </div>
+                    <div class="ie-group">
+                        <span class="ie-title">Camadas</span>
+                        <ul id="ie-layers" class="ie-layers"></ul>
+                    </div>
+                </aside>
+                <div class="ie-center"><div class="ie-stage" id="ie-stage"><canvas id="ie-canvas"></canvas></div></div>
+                <aside class="ie-right" id="ie-props"></aside>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/imageeditor.js"></script>
     <script src="/static/editor.js"></script>
 </body>
 </html>

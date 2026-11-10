@@ -19,9 +19,10 @@ YouTube** — cola o link, o app baixa sozinho (via
 [yt-dlp](https://github.com/yt-dlp/yt-dlp), open-source e gratuito) e edita
 normalmente a partir daí.
 
-Tem também um **terceiro modo**: um editor simples pra você mesmo cortar,
-reordenar e remover trechos na mão (tipo CapCut/Premiere/DaVinci, só mais
-básico) — veja a seção "✂️ Editor simples" mais abaixo.
+Tem também um **terceiro modo**: um editor por linha do tempo pra você mesmo
+editar na mão (tipo CapCut/Premiere, com várias faixas de vídeo e áudio e
+um editor de imagem pra capas e referências) — veja a seção
+"✂️ Editor por linha do tempo" mais abaixo.
 
 Também gera um arquivo `.fcpxml` que você importa direto no **Adobe Premiere
 Pro**, já com os cortes marcados numa sequência a partir do vídeo bruto
@@ -136,28 +137,75 @@ interface web (modo automático e modo chat) quanto na pasta `entrada/`
 Sem nenhum arquivo em `motion_graphics/`, tudo continua funcionando
 normalmente — só não oferece motion graphics nenhum.
 
-## ✂️ Editor simples (cortar, reordenar, remover na mão)
+## ✂️ Editor por linha do tempo (estilo CapCut/Premiere)
 
 Clique em "✂️ Prefere editar você mesmo?" na página inicial (ou vá direto em
-`/editor`) pra abrir um editor bem básico: você manda um vídeo, marca
-início e fim de cada pedaço que quer usar, monta a ordem arrastando os
-cortes na lista e remove o que não quiser — e exporta um vídeo novo juntando
-só esses pedaços, na ordem que você escolheu.
+`/editor`). É um editor de vídeo de verdade, com **várias faixas**:
 
-- Marque o início/fim digitando o tempo (em segundos, ex: `12.5`, ou
-  minuto:segundo, ex: `1:05`) ou tocando em "usar atual" com o vídeo parado
-  no ponto certo.
-- Dá pra conferir cada corte com o botão "▶ prévia" antes de exportar.
-- Arraste os cortes na lista pra mudar a ordem; o botão "✕ remover" tira um
-  corte da lista.
-- Não precisa usar os cortes em ordem — pode pegar um pedaço do fim do
-  vídeo e colocar primeiro, por exemplo.
+- **Biblioteca de mídia** à esquerda: importe vídeos, áudios e imagens
+  (botão "+ Importar" ou arrastando arquivos). Arraste a mídia pra uma faixa
+  da linha do tempo (ou dê duplo clique pra colocar no cursor).
+- **Faixas de vídeo/imagem (V1, V2, ...)**: a de cima fica na frente — use
+  pra legendas em imagem, imagens de referência, logos, b-roll, etc.
+  **Faixas de áudio (A1, A2, ...)**: música, narração, efeitos. Dá pra criar
+  quantas faixas quiser, ocultar uma camada (👁) ou silenciar (🔊).
+- Arraste os clipes pra mover (inclusive entre faixas), puxe as pontas pra
+  aparar, `S` divide no cursor vermelho, `Del` exclui, `Espaço` toca,
+  `←`/`→` andam um quadro, `Ctrl+Z`/`Ctrl+Y` desfazem/refazem. Os clipes
+  "grudam" no cursor e nas pontas dos outros clipes.
+- **Barra de ferramentas da timeline**: use **Selecionar** (`V`) para mover
+  clipes ou **Lâmina** (`C`) para cortar no ponto clicado. Selecione um clipe
+  e clique em **Encostar** para fechar o espaço até o clipe anterior da
+  mesma faixa; os dois continuam editáveis.
+- Com a ferramenta **Selecionar**, arraste um retângulo a partir de uma
+  área vazia da timeline para selecionar vários clipes; `Ctrl` ou `Shift`
+  adiciona à seleção. Mova ou exclua a seleção de uma vez.
+- Ao colocar um vídeo com áudio em uma faixa de vídeo, o áudio aparece em
+  uma faixa separada e os dois clipes ficam vinculados: mover, cortar, aparar
+  ou excluir um afeta ambos. Clique com o botão direito para **Desagrupar**
+  ou para **Agrupar** clipes selecionados. Em projetos antigos, clique com
+  o botão direito em um vídeo e escolha **Separar áudio e vincular ao vídeo**.
+  Clipes vinculados em faixas diferentes movem-se horizontalmente juntos;
+  desagrupe para movê-los entre faixas independentemente.
+- As ondas de áudio aparecem nos clipes com som. São geradas localmente com
+  FFmpeg, guardadas no disco e ajustadas ao trecho e ao zoom da timeline.
+- **Transição**: selecione o primeiro de dois clipes de vídeo/imagem
+  encostados na mesma faixa e clique em **Transição**. Os fades de saída e/ou
+  entrada afetam também o áudio e substituem os fades correspondentes dos
+  clipes. Outra opção é selecionar ou importar um vídeo de efeito (por
+  exemplo, obtido no Mixkit), que entra sem áudio em uma nova faixa acima
+  da montagem, centralizado e limitado à duração dos clipes. Para sobrepor
+  a imagem sem cobri-la, o arquivo precisa de transparência e o formato deve
+  ser compatível com o navegador e o FFmpeg; um vídeo opaco cobre a imagem.
+  Confira a licença do efeito escolhido. A edição pode ser desfeita com
+  `Ctrl+Z`.
+- **Propriedades** (direita): volume, opacidade, tamanho, posição na tela,
+  fade de entrada/saída e duração de cada clipe.
+- Formato do vídeo: 16:9, 9:16, 1:1 ou 4:5.
+- **Legendas automáticas**: clique no botão no topo e em "Gerar legendas".
+  O Whisper transcreve o áudio audível da montagem (inclusive cortes e
+  faixas de áudio); o modelo `base` é baixado na primeira utilização.
+  Na faixa **Legendas** da linha do tempo, clique em um trecho para abrir
+  diretamente seu texto na lista e corrigi-lo ou excluí-lo. As legendas
+  aparecem na prévia e ficam gravadas no vídeo exportado. Se alterar a
+  montagem de áudio, gere novamente para manter a sincronização.
+- Seu projeto fica salvo no navegador e as mídias no disco
+  (`editor_jobs/assets/`), então dá pra fechar e continuar depois.
 
-É bem mais simples que o modo automático de propósito: sem legenda
-queimada, sem redimensionar, sem música — só corta e cola os pedaços que
-você escolheu, mantendo o vídeo como ele é. Por enquanto só aceita arquivo
-de vídeo (sem link do YouTube nessa tela — use o modo automático ou o chat
-pra baixar do YouTube primeiro).
+### 🎨 Editor de imagem (capa, referências, setas...)
+
+Botão "🖼 Criar imagem / capa" no topo (ou ✎ numa imagem da biblioteca): editor
+em camadas com **texto** (fontes, contorno, sombra, fundo), **formas**,
+**setas**, **imagens** (do computador, da biblioteca ou o **frame atual do
+vídeo**, ótimo pra capa), com ajustes de brilho/contraste/saturação/desfoque
+etc., camadas com opacidade e rotação, fundo transparente e tamanhos prontos
+(capa do YouTube 1280×720, vertical, quadrado...). "Salvar na biblioteca"
+gera um PNG que você arrasta pra linha do tempo (e que dá pra reabrir e
+continuar editando); "⬇ PNG" baixa a imagem, por exemplo pra usar de
+thumbnail no YouTube.
+
+O vídeo final é montado pelo FFmpeg (já usado pelo resto do app) quando você
+clica em "Exportar vídeo".
 
 ## 💬 Modo chat — conversando com o diretor de IA
 

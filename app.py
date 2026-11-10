@@ -3,9 +3,14 @@ App web local — roda inteiramente no seu computador (python app.py),
 sem hospedagem paga, sem conta, sem créditos. Abra http://localhost:8000
 depois de rodar.
 """
+import json
+import mimetypes
 import os
+import re
 import shutil
 import threading
+import time
+import tempfile
 import uuid
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -19,6 +24,7 @@ from pipeline import transcribe as T
 from pipeline import render as R
 from pipeline import youtube as YT
 from pipeline import editor as ED
+from pipeline import captions as C
 from pipeline.notify import _open_folder
 from watcher import load_config, watch_loop, ENTRADA, SAIDA
 
@@ -255,35 +261,43 @@ def open_folder(job_id: str):
     return {"ok": True}
 
 
-EDITOR_SOURCES: dict[str, dict] = {}
+EDITOR_ASSETS: dict[str, dict] = {}
 EDITOR_JOBS: dict[str, dict] = {}
+EDITOR_CAPTION_JOBS: dict[str, dict] = {}
+EDITOR_WAVEFORM_LOCK = threading.Lock()
+EDITOR_ASSETS_DIR = os.path.join(EDITOR_DIR, "assets")
+os.makedirs(EDITOR_ASSETS_DIR, exist_ok=True)
 
 
-def _rehydrate_editor_sources():
-    """Se o app reiniciar (ex: pra atualizar pra uma versão nova) com o
-    navegador ainda aberto numa sessão do editor, o vídeo que a pessoa já
-    tinha enviado continua salvo em disco (editor_jobs/<id>/source.*) — só a
-    lista EDITOR_SOURCES, que fica em memória, é que se perdia. Isso aqui
-    recria essa lista varrendo o que já está em disco, pra não forçar a
-    pessoa a reenviar o vídeo (ela só perderia os cortes que já tinha
-    marcado, que ficam guardados no navegador — ver editor.js)."""
-    if not os.path.isdir(EDITOR_DIR):
-        return
-    for name in os.listdir(EDITOR_DIR):
-        folder = os.path.join(EDITOR_DIR, name)
-        if not os.path.isdir(folder):
+def _save_asset_meta(asset: dict):
+    with open(os.path.join(os.path.dirname(asset["path"]), "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(asset, f, ensure_ascii=False)
+
+
+def _public_asset(asset: dict) -> dict:
+    data = {k: v for k, v in asset.items() if k != "path"}
+    data["url"] = f"/editor/asset/{asset['id']}?v={asset.get('version', 0)}"
+    return data
+
+
+def _rehydrate_editor_assets():
+    """Se o app reiniciar com o navegador ainda aberto, as mídias já enviadas
+    continuam em disco (editor_jobs/assets/<id>/) — só a lista em memória se
+    perderia. Isso recria a lista a partir do meta.json de cada pasta."""
+    for name in os.listdir(EDITOR_ASSETS_DIR):
+        meta_path = os.path.join(EDITOR_ASSETS_DIR, name, "meta.json")
+        if not os.path.isfile(meta_path):
             continue
-        for fn in os.listdir(folder):
-            if fn.startswith("source"):
-                path = os.path.join(folder, fn)
-                try:
-                    EDITOR_SOURCES[name] = {"path": path, "duration": R.ffprobe_duration(path)}
-                except Exception:
-                    pass
-                break
+        try:
+            with open(meta_path, encoding="utf-8") as f:
+                asset = json.load(f)
+            if os.path.isfile(asset["path"]):
+                EDITOR_ASSETS[asset["id"]] = asset
+        except Exception:
+            pass
 
 
-_rehydrate_editor_sources()
+_rehydrate_editor_assets()
 
 
 @app.get("/editor", response_class=HTMLResponse)
@@ -291,50 +305,137 @@ def editor_page(request: Request):
     return templates.TemplateResponse(request, "editor.html")
 
 
-@app.post("/editor/upload")
-async def editor_upload(file: UploadFile = File(...)):
-    """Salva o vídeo bruto que o usuário vai editar manualmente (cortar,
-    reordenar, remover trechos) — é só salvar e medir a duração, sem fila
-    de processamento nenhuma, porque isso aqui é rápido."""
-    if not file.filename:
-        raise HTTPException(400, "Envie um arquivo de vídeo.")
+@app.get("/editor/assets")
+def editor_assets_list():
+    assets = sorted(EDITOR_ASSETS.values(), key=lambda a: a.get("created", 0))
+    return [_public_asset(a) for a in assets]
 
-    source_id = uuid.uuid4().hex[:12]
-    source_dir = os.path.join(EDITOR_DIR, source_id)
-    os.makedirs(source_dir, exist_ok=True)
-    ext = os.path.splitext(file.filename)[1] or ".mp4"
-    source_path = os.path.join(source_dir, f"source{ext}")
-    with open(source_path, "wb") as f:
+
+@app.post("/editor/assets")
+async def editor_asset_upload(
+    file: UploadFile = File(...),
+    design: str = Form(""),
+    replace_id: str = Form(""),
+):
+    """Salva uma mídia (vídeo, áudio ou imagem) na biblioteca do editor.
+    `design` guarda as camadas do editor de imagem (pra reabrir e editar de
+    novo) e `replace_id` troca o arquivo de uma imagem já existente mantendo
+    o mesmo id (os clipes na linha do tempo continuam apontando pra ela)."""
+    if not file.filename:
+        raise HTTPException(400, "Envie um arquivo.")
+
+    existing = EDITOR_ASSETS.get(replace_id) if replace_id else None
+    asset_id = existing["id"] if existing else uuid.uuid4().hex[:12]
+    asset_dir = os.path.join(EDITOR_ASSETS_DIR, asset_id)
+    os.makedirs(asset_dir, exist_ok=True)
+    ext = re.sub(r"[^A-Za-z0-9.]", "", os.path.splitext(file.filename)[1])[:8] or ".bin"
+    path = os.path.join(asset_dir, f"file{ext}")
+    with open(path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
     try:
-        duration = R.ffprobe_duration(source_path)
+        info = ED.probe_media(path)
     except Exception:
-        raise HTTPException(400, "Não consegui ler esse vídeo — confira se o arquivo não está corrompido.")
+        if not existing:
+            shutil.rmtree(asset_dir, ignore_errors=True)
+        raise HTTPException(400, "Não consegui ler esse arquivo — confira se ele não está corrompido.")
 
-    EDITOR_SOURCES[source_id] = {"path": source_path, "duration": duration}
-    return {"source_id": source_id, "duration": duration, "video_url": f"/editor/source/{source_id}"}
+    if existing and existing["path"] != path and os.path.isfile(existing["path"]):
+        os.remove(existing["path"])
+
+    asset = {
+        "id": asset_id,
+        "name": existing["name"] if existing else file.filename,
+        "path": path,
+        "created": existing["created"] if existing else time.time(),
+        "version": (existing.get("version", 0) + 1) if existing else 0,
+        "design": design or (existing.get("design", "") if existing else ""),
+        **info,
+    }
+    EDITOR_ASSETS[asset_id] = asset
+    _save_asset_meta(asset)
+    return _public_asset(asset)
 
 
-@app.get("/editor/source/{source_id}")
-def editor_source(source_id: str):
-    source = EDITOR_SOURCES.get(source_id)
-    if not source:
-        raise HTTPException(404, "vídeo não encontrado")
-    return FileResponse(source["path"], media_type="video/mp4")
+@app.get("/editor/asset/{asset_id}")
+def editor_asset(asset_id: str):
+    asset = EDITOR_ASSETS.get(asset_id)
+    if not asset:
+        raise HTTPException(404, "mídia não encontrada")
+    media_type = mimetypes.guess_type(asset["path"])[0] or "application/octet-stream"
+    return FileResponse(asset["path"], media_type=media_type)
+
+
+@app.get("/editor/assets/{asset_id}/waveform")
+def editor_waveform(asset_id: str):
+    asset = EDITOR_ASSETS.get(asset_id)
+    if not asset or not asset.get("has_audio"):
+        raise HTTPException(404, "Mídia com áudio não encontrada.")
+    cache_path = os.path.join(os.path.dirname(asset["path"]), f"waveform-{asset.get('version', 0)}.json")
+    try:
+        with EDITOR_WAVEFORM_LOCK:
+            if os.path.isfile(cache_path):
+                with open(cache_path, encoding="utf-8") as f:
+                    return JSONResponse(json.load(f))
+            peaks = ED.audio_peaks(asset["path"])
+            result = {"peaks": peaks, "peaks_per_second": 100}
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, separators=(",", ":"))
+        return JSONResponse(result)
+    except (OSError, RuntimeError, ValueError) as e:
+        raise HTTPException(500, f"Não foi possível gerar as ondas de áudio: {e}") from e
+
+
+@app.delete("/editor/assets/{asset_id}")
+def editor_asset_delete(asset_id: str):
+    asset = EDITOR_ASSETS.pop(asset_id, None)
+    if asset:
+        shutil.rmtree(os.path.dirname(asset["path"]), ignore_errors=True)
+    return {"ok": True}
+
+
+@app.post("/editor/captions")
+async def editor_captions(request: Request):
+    project = await request.json()
+    if not any(t.get("clips") for t in project.get("tracks", [])):
+        raise HTTPException(400, "Adicione um vídeo ou áudio à linha do tempo.")
+    job_id = uuid.uuid4().hex[:12]
+    EDITOR_CAPTION_JOBS[job_id] = {"status": "queued", "message": "Preparando áudio..."}
+    assets = dict(EDITOR_ASSETS)
+
+    def run():
+        job = EDITOR_CAPTION_JOBS[job_id]
+        try:
+            job["status"] = "processing"
+            with tempfile.TemporaryDirectory(prefix="editor_captions_") as tmp:
+                audio = os.path.join(tmp, "audio.wav")
+                ED.extract_timeline_audio(project, assets, audio)
+                job["message"] = "Transcrevendo com Whisper. Na primeira vez o modelo é baixado e pode demorar..."
+                transcript = T.transcribe(audio, model_size="base", language=None)
+                cues = C.cues_from_transcript(transcript)
+            job["captions"] = cues
+            job["status"] = "done"
+        except Exception as e:
+            job["status"] = "error"
+            job["error"] = str(e)
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.get("/editor/captions/{job_id}")
+def editor_captions_status(job_id: str):
+    job = EDITOR_CAPTION_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "Processo de legendagem não encontrado.")
+    return JSONResponse(job)
 
 
 @app.post("/editor/export")
 async def editor_export(request: Request):
-    body = await request.json()
-    source_id = body.get("source_id", "")
-    segments = body.get("segments", [])
-
-    source = EDITOR_SOURCES.get(source_id)
-    if not source:
-        raise HTTPException(404, "vídeo não encontrado — faça o upload de novo")
-    if not segments:
-        raise HTTPException(400, "Adicione pelo menos um corte antes de exportar.")
+    project = await request.json()
+    if not any(t.get("clips") for t in project.get("tracks", [])):
+        raise HTTPException(400, "Adicione pelo menos um clipe antes de exportar.")
 
     job_id = uuid.uuid4().hex[:12]
     EDITOR_JOBS[job_id] = {"status": "queued", "progress": 0, "message": "Na fila..."}
@@ -349,7 +450,7 @@ async def editor_export(request: Request):
             out_dir = os.path.join(EDITOR_DIR, job_id)
             os.makedirs(out_dir, exist_ok=True)
             out_path = os.path.join(out_dir, "editado.mp4")
-            ED.export_edit(source["path"], segments, out_path, progress_cb=progress_cb)
+            ED.export_timeline(project, dict(EDITOR_ASSETS), out_path, progress_cb=progress_cb)
             EDITOR_JOBS[job_id]["status"] = "done"
             EDITOR_JOBS[job_id]["output_path"] = out_path
         except Exception as e:
