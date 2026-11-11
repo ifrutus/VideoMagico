@@ -19,6 +19,7 @@
 
     const state = { assets: [], project: null, selectedId: null, playhead: 0, playing: false, zoom: 80 };
     let selectedIds = new Set();
+    let selectedCaptions = new Set();
     let undoStack = [];
     let redoStack = [];
     let draggingAssetId = null;
@@ -77,10 +78,36 @@
         return allClips().filter(item => selectedIds.has(item.clip.id));
     }
 
+    function movingCaptions(items) {
+        return (state.project.captions || []).filter(cue => selectedCaptions.has(cue)
+            || items.some(({ clip }) => cue.start >= clip.start && cue.start < clipEnd(clip)));
+    }
+
+    function captionPositions(cues) {
+        return cues.map(cue => ({ cue, start: cue.start, end: cue.end }));
+    }
+
+    function moveCaptions(positions, delta) {
+        positions.forEach(({ cue, start, end }) => {
+            cue.start = start + delta;
+            cue.end = end + delta;
+        });
+        inner.querySelectorAll(".caption-cue").forEach(el => {
+            const cue = (state.project.captions || [])[Number(el.dataset.index)];
+            if (cue) el.style.left = `${cue.start * state.zoom}px`;
+        });
+    }
+
     function totalDuration() {
         let t = 0;
         state.project.tracks.forEach(tr => tr.clips.forEach(c => { t = Math.max(t, clipEnd(c)); }));
         return t;
+    }
+
+    function warnCaptionsPastEnd(captions) {
+        if (captions.some(({ cue }) => cue.end > totalDuration() + EPS)) {
+            toast("Parte da legenda está depois do fim da montagem e não aparecerá na exportação.", 6000);
+        }
     }
 
     function canPlace(track, asset) {
@@ -116,6 +143,7 @@
 
     function restore(json) {
         state.project = JSON.parse(json);
+        selectedCaptions.clear();
         selectedIds = new Set([...selectedIds].filter(id => findClip(id)));
         selectedIds = expandGroups(selectedIds);
         if (!selectedIds.has(state.selectedId)) state.selectedId = selectedIds.values().next().value || null;
@@ -310,6 +338,7 @@
         }
         state.selectedId = clip.id;
         selectedIds = new Set(ids);
+        selectedCaptions.clear();
         changed();
     }
 
@@ -376,10 +405,14 @@
         const items = allClips().filter(item => item.clip.id === clip.id || (clip.group_id && item.clip.group_id === clip.group_id));
         const delta = start - clip.start;
         if (!canMoveItems(items, delta)) return toast("Não há espaço para mover todos os clipes vinculados.");
+        const captions = captionPositions(movingCaptions(items));
+        if (captions.some(item => item.start + delta < 0)) return toast("Não há espaço para mover as legendas antes do início.");
         checkpoint();
         items.forEach(item => { item.clip.start += delta; });
+        moveCaptions(captions, delta);
         changed();
-        toast("Clipes encostados; continuam editáveis.");
+        if (captions.some(({ cue }) => cue.end > totalDuration() + EPS)) warnCaptionsPastEnd(captions);
+        else toast("Clipes encostados; continuam editáveis.");
     }
 
     function duplicateSelected() {
@@ -399,15 +432,18 @@
             return copy.id;
         });
         selectedIds = new Set(copies);
+        selectedCaptions.clear();
         state.selectedId = copies[0];
         changed();
     }
 
     function deleteSelected() {
-        if (!selectedIds.size) return;
+        if (!selectedIds.size && !selectedCaptions.size) return;
         checkpoint();
         state.project.tracks.forEach(track => { track.clips = track.clips.filter(c => !selectedIds.has(c.id)); });
+        if (state.project.captions) state.project.captions = state.project.captions.filter(cue => !selectedCaptions.has(cue));
         selectedIds.clear();
+        selectedCaptions.clear();
         state.selectedId = null;
         changed();
     }
@@ -449,7 +485,8 @@
 
     function renderTimeline() {
         const zoom = state.zoom;
-        const seconds = Math.max(totalDuration() + 20, 60);
+        const captionEnd = (state.project.captions || []).reduce((end, cue) => Math.max(end, cue.end), 0);
+        const seconds = Math.max(Math.max(totalDuration(), captionEnd) + 20, 60);
         const laneW = Math.max(seconds * zoom, scrollEl.clientWidth - HEAD_W);
         inner.style.width = (HEAD_W + laneW) + "px";
         inner.innerHTML = "";
@@ -501,6 +538,9 @@
         const lane = document.createElement("div");
         lane.className = "caption-lane";
         lane.style.width = laneW + "px";
+        lane.addEventListener("pointerdown", e => {
+            if (e.target === lane && e.button === 0 && activeTool === "select") startMarquee(e, lane);
+        });
         const cues = state.project.captions || [];
         if (!cues.length) {
             const empty = document.createElement("button");
@@ -513,13 +553,28 @@
         cues.forEach((cue, index) => {
             const button = document.createElement("button");
             button.type = "button";
-            button.className = "caption-cue";
+            button.className = "caption-cue" + (selectedCaptions.has(cue) ? " selected" : "");
+            button.dataset.index = index;
             button.style.left = `${cue.start * state.zoom}px`;
             button.style.width = `${Math.max(4, (cue.end - cue.start) * state.zoom)}px`;
             button.textContent = cue.text || "(sem texto)";
-            button.title = `${formatTime(cue.start)} – ${formatTime(cue.end)}: ${cue.text} — clique para editar`;
+            button.title = `${formatTime(cue.start)} – ${formatTime(cue.end)}: ${cue.text} — clique para editar; arraste para mover`;
             button.setAttribute("aria-label", `Editar legenda ${index + 1}: ${cue.text}`);
-            button.addEventListener("click", () => {
+            let suppressClick = false;
+            button.addEventListener("pointerdown", e => {
+                if (e.button !== 0 || activeTool !== "select") return;
+                e.stopPropagation();
+                const additive = e.ctrlKey || e.metaKey || e.shiftKey;
+                if (!selectedCaptions.has(cue)) {
+                    if (!additive) { selectedIds.clear(); state.selectedId = null; selectedCaptions.clear(); }
+                    selectedCaptions.add(cue);
+                    refreshSelection();
+                }
+                suppressClick = additive;
+                startCaptionDrag(e, () => { suppressClick = true; });
+            });
+            button.addEventListener("click", e => {
+                if (suppressClick || e.ctrlKey || e.metaKey || e.shiftKey) { suppressClick = false; return; }
                 pause();
                 seek(cue.start);
                 openCaptions(index);
@@ -608,6 +663,7 @@
             if (e.button !== 0) return;
             e.stopPropagation();
             if (!selectedIds.has(clip.id)) {
+                if (!e.ctrlKey && !e.metaKey && !e.shiftKey) selectedCaptions.clear();
                 const ids = (e.ctrlKey || e.metaKey || e.shiftKey) ? [...selectedIds, clip.id] : [clip.id];
                 selectClips(ids, clip.id);
             } else {
@@ -627,7 +683,7 @@
         });
         el.addEventListener("contextmenu", e => {
             e.preventDefault();
-            if (!selectedIds.has(clip.id)) selectClips([clip.id], clip.id);
+            if (!selectedIds.has(clip.id)) { selectedCaptions.clear(); selectClips([clip.id], clip.id); }
             showClipMenu(e.clientX, e.clientY);
         });
         return el;
@@ -640,6 +696,9 @@
 
     function refreshSelection() {
         inner.querySelectorAll(".clip").forEach(el => el.classList.toggle("selected", selectedIds.has(el.dataset.id)));
+        inner.querySelectorAll(".caption-cue").forEach(el => {
+            el.classList.toggle("selected", selectedCaptions.has((state.project.captions || [])[Number(el.dataset.index)]));
+        });
         updateInspector();
     }
 
@@ -686,6 +745,7 @@
         const x0 = e.clientX, y0 = e.clientY;
         const additive = e.ctrlKey || e.metaKey || e.shiftKey;
         const original = additive ? new Set(selectedIds) : new Set();
+        const originalCaptions = additive ? new Set(selectedCaptions) : new Set();
         let box = null;
         const move = ev => {
             if (!box && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
@@ -702,6 +762,13 @@
                 const rect = el.getBoundingClientRect();
                 if (rect.left < right && rect.right > left && rect.top < bottom && rect.bottom > top) ids.add(el.dataset.id);
             });
+            selectedCaptions = new Set(originalCaptions);
+            inner.querySelectorAll(".caption-cue").forEach(el => {
+                const rect = el.getBoundingClientRect();
+                if (rect.left < right && rect.right > left && rect.top < bottom && rect.bottom > top) {
+                    selectedCaptions.add(state.project.captions[Number(el.dataset.index)]);
+                }
+            });
             selectClips(ids);
         };
         const up = ev => {
@@ -709,6 +776,7 @@
             window.removeEventListener("pointerup", up);
             if (box) box.remove();
             else {
+                selectedCaptions = originalCaptions;
                 selectClips(original);
                 seek((ev.clientX - lane.getBoundingClientRect().left) / state.zoom);
             }
@@ -762,6 +830,7 @@
 
     function startGroupDrag(e, anchor, mode) {
         const items = selectedItems().map(item => ({ ...item, original: { ...item.clip } }));
+        const captions = mode === "move" ? captionPositions(movingCaptions(items)) : [];
         const startX = e.clientX, startY = e.clientY;
         const before = snap();
         let moved = false;
@@ -776,12 +845,13 @@
             const previous = items.map(item => ({ ...item.clip }));
             items.forEach(item => Object.assign(item.clip, item.original));
             if (mode === "move") {
-                delta = Math.max(delta, -Math.min(...items.map(item => item.original.start)));
+                delta = Math.max(delta, -Math.min(...items.map(item => item.original.start), ...captions.map(item => item.start)));
                 if (!canMoveItems(items, delta)) {
                     items.forEach((item, index) => Object.assign(item.clip, previous[index]));
                     return;
                 }
                 items.forEach(item => { item.clip.start = item.original.start + delta; });
+                moveCaptions(captions, delta);
             } else {
                 const ids = new Set(items.map(item => item.clip.id));
                 let min = -Infinity, max = Infinity;
@@ -819,7 +889,7 @@
         const onUp = () => {
             window.removeEventListener("pointermove", onMove);
             window.removeEventListener("pointerup", onUp);
-            if (moved) changed();
+            if (moved) { changed(); warnCaptionsPastEnd(captions); }
             else if (!e.ctrlKey && !e.metaKey && !e.shiftKey) selectClips([anchor.id], anchor.id);
         };
         window.addEventListener("pointermove", onMove);
@@ -827,6 +897,40 @@
     }
 
     // ---------- arrastar / aparar clipes ----------
+
+    function startCaptionDrag(e, suppressClick) {
+        const items = selectedItems().map(item => ({ ...item, original: { ...item.clip } }));
+        const captions = captionPositions(movingCaptions(items));
+        const startX = e.clientX, startY = e.clientY;
+        const before = snap();
+        let moved = false;
+        const move = ev => {
+            if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 3) return;
+            if (!moved) { checkpoint(before); moved = true; suppressClick(); }
+            const delta = Math.max((ev.clientX - startX) / state.zoom,
+                -Math.min(...items.map(item => item.original.start), ...captions.map(item => item.start)));
+            const previous = items.map(item => item.clip.start);
+            items.forEach(item => { item.clip.start = item.original.start; });
+            if (!canMoveItems(items, delta)) {
+                items.forEach((item, index) => { item.clip.start = previous[index]; });
+                return;
+            }
+            items.forEach(item => {
+                item.clip.start = item.original.start + delta;
+                const el = inner.querySelector(`.clip[data-id="${item.clip.id}"]`);
+                if (el) positionClip(el, item.clip);
+            });
+            moveCaptions(captions, delta);
+            queueRender();
+        };
+        const up = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            if (moved) { changed(); warnCaptionsPastEnd(captions); }
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+    }
 
     function snapPoints(excludeId) {
         const pts = [0, state.playhead];
@@ -867,6 +971,7 @@
         const startX = e.clientX;
         const startY = e.clientY;
         const orig = { start: clip.start, dur: clip.dur, in: clip.in };
+        const captions = mode === "move" ? captionPositions(movingCaptions([{ clip }])) : [];
         let moved = false;
         const pts = snapPoints(clip.id);
 
@@ -877,7 +982,8 @@
             let snapped = null;
 
             if (mode === "move") {
-                let start = Math.max(0, orig.start + dx);
+                const minStart = Math.max(0, orig.start - Math.min(...captions.map(item => item.start), orig.start));
+                let start = Math.max(minStart, orig.start + dx);
                 const s1 = nearest(start, pts);
                 const s2 = nearest(start + orig.dur, pts);
                 if (s1 != null && (s2 == null || Math.abs(s1 - start) <= Math.abs(s2 - start - orig.dur))) {
@@ -885,16 +991,21 @@
                 } else if (s2 != null) {
                     start = s2 - orig.dur; snapped = s2;
                 }
+                start = Math.max(minStart, start);
                 const lanes = document.elementsFromPoint(ev.clientX, ev.clientY).filter(n => n.classList && n.classList.contains("tl-lane"));
                 const target = lanes.length ? state.project.tracks.find(t => t.id === lanes[0].dataset.track) : null;
-                if (target && target !== track && canPlace(target, asset)) {
+                const destination = target && target !== track && canPlace(target, asset) ? target : track;
+                const fitted = fitStart(destination, clip.id, start, clip.dur);
+                if (fitted < minStart - EPS) { showSnap(null); return; }
+                if (destination !== track) {
                     track.clips = track.clips.filter(c => c.id !== clip.id);
-                    target.clips.push(clip);
-                    track = target;
-                    inner.querySelector(`.tl-lane[data-track="${target.id}"]`).appendChild(el);
+                    destination.clips.push(clip);
+                    track = destination;
+                    inner.querySelector(`.tl-lane[data-track="${destination.id}"]`).appendChild(el);
                 }
-                clip.start = fitStart(track, clip.id, Math.max(0, start), clip.dur);
+                clip.start = fitted;
                 if (Math.abs(clip.start - start) > EPS) snapped = null;
+                moveCaptions(captions, clip.start - orig.start);
             } else if (mode === "trimL") {
                 const others = track.clips.filter(c => c.id !== clip.id && clipEnd(c) <= orig.start + EPS);
                 const prevEnd = others.reduce((m, c) => Math.max(m, clipEnd(c)), 0);
@@ -927,7 +1038,7 @@
             window.removeEventListener("pointermove", onMove);
             window.removeEventListener("pointerup", onUp);
             showSnap(null);
-            if (moved) changed();
+            if (moved) { changed(); warnCaptionsPastEnd(captions); }
         };
         window.addEventListener("pointermove", onMove);
         window.addEventListener("pointerup", onUp);
@@ -1315,6 +1426,7 @@
         state.project = emptyProject(width, height);
         state.selectedId = null;
         selectedIds.clear();
+        selectedCaptions.clear();
         state.playhead = 0;
         changed();
     });
@@ -1528,6 +1640,7 @@
             });
             const remove = mkBtn("✕", "Excluir legenda", () => {
                 checkpoint();
+                selectedCaptions.delete(cue);
                 state.project.captions.splice(index, 1);
                 changed();
                 renderCaptions();
@@ -1538,7 +1651,7 @@
         });
         if (!captionJobRunning) {
             $("captions-status").textContent = captionsStale()
-                ? "O áudio da montagem mudou. Gere as legendas novamente para sincronizá-las."
+                ? "O áudio da montagem mudou. Confira a sincronização das legendas ou gere-as novamente."
                 : cues.length ? `${cues.length} legenda(s). Clique no texto para corrigir.` : "Nenhuma legenda gerada.";
         }
     }
@@ -1561,6 +1674,7 @@
     $("captions-clear").addEventListener("click", () => {
         if (!confirm("Remover todas as legendas deste projeto?")) return;
         checkpoint();
+        selectedCaptions.clear();
         state.project.captions = [];
         delete state.project.captionAudioSignature;
         changed();
@@ -1594,6 +1708,7 @@
             if (signature !== audioSignature()) throw new Error("A montagem mudou durante a transcrição. Gere as legendas novamente.");
             if (!job.captions.length) throw new Error("Nenhuma fala foi encontrada no áudio. As legendas anteriores foram preservadas.");
             checkpoint();
+            selectedCaptions.clear();
             state.project.captions = job.captions;
             state.project.captionAudioSignature = signature;
             changed();

@@ -158,8 +158,8 @@ Clique em "✂️ Prefere editar você mesmo?" na página inicial (ou vá direto
   e clique em **Encostar** para fechar o espaço até o clipe anterior da
   mesma faixa; os dois continuam editáveis.
 - Com a ferramenta **Selecionar**, arraste um retângulo a partir de uma
-  área vazia da timeline para selecionar vários clipes; `Ctrl` ou `Shift`
-  adiciona à seleção. Mova ou exclua a seleção de uma vez.
+  área vazia da timeline para selecionar clipes e legendas; `Ctrl` ou `Shift`
+  adiciona à seleção. Arraste ou exclua os itens selecionados de uma vez.
 - Ao colocar um vídeo com áudio em uma faixa de vídeo, o áudio aparece em
   uma faixa separada e os dois clipes ficam vinculados: mover, cortar, aparar
   ou excluir um afeta ambos. Clique com o botão direito para **Desagrupar**
@@ -186,9 +186,15 @@ Clique em "✂️ Prefere editar você mesmo?" na página inicial (ou vá direto
   O Whisper transcreve o áudio audível da montagem (inclusive cortes e
   faixas de áudio); o modelo `base` é baixado na primeira utilização.
   Na faixa **Legendas** da linha do tempo, clique em um trecho para abrir
-  diretamente seu texto na lista e corrigi-lo ou excluí-lo. As legendas
-  aparecem na prévia e ficam gravadas no vídeo exportado. Se alterar a
-  montagem de áudio, gere novamente para manter a sincronização.
+  diretamente seu texto na lista e corrigi-lo ou excluí-lo; arraste o trecho
+  para movê-lo. Ao mover ou encostar clipes, legendas cujo início está dentro
+  deles acompanham o movimento uma vez, mesmo com áudio e vídeo vinculados.
+  Legendas explicitamente selecionadas também acompanham a seleção; elas
+  podem sobrepor outras legendas. Revise as sobreposições e, se outros sons
+  permanecerem no lugar ou a montagem mudar, confira a sincronização.
+  As legendas aparecem na prévia e ficam gravadas no vídeo exportado.
+  Trechos após o fim da montagem não aparecem na exportação.
+  O aviso de áudio alterado permanece como lembrete para conferir o resultado.
 - Seu projeto fica salvo no navegador e as mídias no disco
   (`editor_jobs/assets/`), então dá pra fechar e continuar depois.
 

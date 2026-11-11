@@ -117,8 +117,9 @@
     position: absolute; top: 4px; bottom: 4px; overflow: hidden;
     padding: 4px 5px; border: 1px solid #aa83d4; border-radius: 6px;
     background: #68458b; color: #fff; font-size: 11px; text-align: left;
-    white-space: nowrap; text-overflow: ellipsis;
+    white-space: nowrap; text-overflow: ellipsis; cursor: grab; touch-action: none;
 }
+.editor-body button.caption-cue.selected { outline: 2px solid #fff; z-index: 3; }
 .editor-body button.caption-cue:hover, .editor-body button.caption-cue:focus-visible {
     background: #8056a9; border-color: #fff;
 }
